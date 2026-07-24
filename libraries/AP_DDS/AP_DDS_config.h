@@ -71,7 +71,9 @@
 #endif
 
 #ifndef AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS
-#define AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS 33
+// Lowered from stock 33ms: pose/twist are separately-throttled topics here
+// (unlike PX4's single synchronous VehicleOdometry), so 10ms keeps them close.
+#define AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS 10
 #endif
 
 #ifndef AP_DDS_LOCAL_VEL_PUB_ENABLED
@@ -79,7 +81,8 @@
 #endif
 
 #ifndef AP_DDS_DELAY_LOCAL_VELOCITY_TOPIC_MS
-#define AP_DDS_DELAY_LOCAL_VELOCITY_TOPIC_MS 33
+// See AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS above — kept in lockstep with it.
+#define AP_DDS_DELAY_LOCAL_VELOCITY_TOPIC_MS 10
 #endif
 
 #ifndef AP_DDS_AIRSPEED_PUB_ENABLED
@@ -143,6 +146,18 @@
 
 #ifndef AP_DDS_GLOBAL_POS_CTRL_ENABLED
 #define AP_DDS_GLOBAL_POS_CTRL_ENABLED 1
+#endif
+
+// True acceleration setpoint control (REP-147 style), separate from
+// AP_DDS_VEL_CTRL_ENABLED's velocity-only /ap/cmd_vel.
+#ifndef AP_DDS_ACCEL_CTRL_ENABLED
+#define AP_DDS_ACCEL_CTRL_ENABLED 1
+#endif
+
+// Direct attitude+thrust control (mavros_msgs/AttitudeTarget); unlike
+// AP_DDS_ACCEL_CTRL_ENABLED, bypasses AC_PosControl's cascade entirely.
+#ifndef AP_DDS_ATTITUDE_CTRL_ENABLED
+#define AP_DDS_ATTITUDE_CTRL_ENABLED 1
 #endif
 
 #ifndef AP_DDS_DYNAMIC_TF_SUB_ENABLED

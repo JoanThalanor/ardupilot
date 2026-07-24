@@ -24,6 +24,34 @@ bool AP_ExternalControl_Copter::set_linear_velocity_and_yaw_rate(const Vector3f 
     return true;
 }
 
+/*
+  set linear acceleration and yaw rate. Pass NaN for yaw_rate_rads to not control yaw
+  acceleration is in earth frame, NED, m/s/s
+*/
+bool AP_ExternalControl_Copter::set_acceleration_and_yaw_rate(const Vector3f &linear_accel_ned_mss, float yaw_rate_rads)
+{
+    if (!ready_for_external_control()) {
+        return false;
+    }
+    const float checked_yaw_rate_rad = isnan(yaw_rate_rads)? 0: yaw_rate_rads;
+
+    copter.mode_guided.set_accel_NED_mss(linear_accel_ned_mss, false, 0, !isnan(yaw_rate_rads), checked_yaw_rate_rad, false, true);
+    return true;
+}
+
+/*
+  set target attitude (quaternion, earth frame NED) and normalized collective
+  thrust [0,1], via GUIDED's Angle submode — bypasses AC_PosControl entirely.
+*/
+bool AP_ExternalControl_Copter::set_attitude_and_thrust(const Quaternion &attitude_ned, const Vector3f &ang_vel_body_rads, float thrust_norm)
+{
+    if (!ready_for_external_control()) {
+        return false;
+    }
+    copter.mode_guided.set_angle(attitude_ned, ang_vel_body_rads, thrust_norm, true);
+    return true;
+}
+
 bool AP_ExternalControl_Copter::set_global_position(const Location& loc)
 {
     // Check if copter is ready for external control and returns false if it is not.

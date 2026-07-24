@@ -6,6 +6,9 @@
 #include "sensor_msgs/msg/BatteryState.h"
 #include "geographic_msgs/msg/GeoPoseStamped.h"
 #include "geometry_msgs/msg/Vector3Stamped.h"
+#if AP_DDS_ACCEL_CTRL_ENABLED
+#include "geometry_msgs/msg/AccelStamped.h"
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
 #if AP_DDS_IMU_PUB_ENABLED
 #include "sensor_msgs/msg/Imu.h"
 #endif //AP_DDS_IMU_PUB_ENABLED
@@ -74,6 +77,12 @@ enum class TopicIndex: uint8_t {
 #if AP_DDS_GLOBAL_POS_CTRL_ENABLED
     GLOBAL_POSITION_SUB,
 #endif // AP_DDS_GLOBAL_POS_CTRL_ENABLED
+#if AP_DDS_ACCEL_CTRL_ENABLED
+    ACCEL_CONTROL_SUB,
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+    ATTITUDE_CONTROL_SUB,
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
 };
 
 static inline constexpr uint8_t to_underlying(const TopicIndex index)
@@ -426,4 +435,40 @@ constexpr struct AP_DDS_Client::Topic_table AP_DDS_Client::topics[] = {
         },
     },
 #endif // AP_DDS_GLOBAL_POS_CTRL_ENABLED
+#if AP_DDS_ACCEL_CTRL_ENABLED
+    {
+        .topic_id = to_underlying(TopicIndex::ACCEL_CONTROL_SUB),
+        .pub_id = to_underlying(TopicIndex::ACCEL_CONTROL_SUB),
+        .sub_id = to_underlying(TopicIndex::ACCEL_CONTROL_SUB),
+        .dw_id = uxrObjectId{.id=to_underlying(TopicIndex::ACCEL_CONTROL_SUB), .type=UXR_DATAWRITER_ID},
+        .dr_id = uxrObjectId{.id=to_underlying(TopicIndex::ACCEL_CONTROL_SUB), .type=UXR_DATAREADER_ID},
+        .topic_rw = Topic_rw::DataReader,
+        .topic_name = "cmd_accel",
+        .type_name = "geometry_msgs::msg::dds_::AccelStamped_",
+        .qos = {
+            .durability = UXR_DURABILITY_VOLATILE,
+            .reliability = UXR_RELIABILITY_RELIABLE,
+            .history = UXR_HISTORY_KEEP_LAST,
+            .depth = 5,
+        },
+    },
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+    {
+        .topic_id = to_underlying(TopicIndex::ATTITUDE_CONTROL_SUB),
+        .pub_id = to_underlying(TopicIndex::ATTITUDE_CONTROL_SUB),
+        .sub_id = to_underlying(TopicIndex::ATTITUDE_CONTROL_SUB),
+        .dw_id = uxrObjectId{.id=to_underlying(TopicIndex::ATTITUDE_CONTROL_SUB), .type=UXR_DATAWRITER_ID},
+        .dr_id = uxrObjectId{.id=to_underlying(TopicIndex::ATTITUDE_CONTROL_SUB), .type=UXR_DATAREADER_ID},
+        .topic_rw = Topic_rw::DataReader,
+        .topic_name = "cmd_attitude",
+        .type_name = "mavros_msgs::msg::dds_::AttitudeTarget_",
+        .qos = {
+            .durability = UXR_DURABILITY_VOLATILE,
+            .reliability = UXR_RELIABILITY_RELIABLE,
+            .history = UXR_HISTORY_KEEP_LAST,
+            .depth = 5,
+        },
+    },
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
 };

@@ -34,9 +34,25 @@ public:
     }
 
     /*
+      Set linear acceleration (earth frame NED, m/s/s) and yaw rate (rad/s).
+      Pass NaN for yaw_rate_rads to not control yaw.
+     */
+    virtual bool set_acceleration_and_yaw_rate(const Vector3f &linear_accel_ned_mss, float yaw_rate_rads) WARN_IF_UNUSED {
+        return false;
+    }
+
+    /*
         Sets the target global position with standard guided mode behavior.
     */
     virtual bool set_global_position(const Location& loc) WARN_IF_UNUSED {
+        return false;
+    }
+
+    /*
+      Set target attitude (quaternion, NED) and normalized thrust [0,1].
+      Bypasses the position/velocity/acceleration controller entirely.
+    */
+    virtual bool set_attitude_and_thrust(const Quaternion &attitude_ned, const Vector3f &ang_vel_body_rads, float thrust_norm) WARN_IF_UNUSED {
         return false;
     }
 

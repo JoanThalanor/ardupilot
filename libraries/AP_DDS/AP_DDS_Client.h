@@ -38,6 +38,12 @@
 #if AP_DDS_NEEDS_TWIST
 #include "geometry_msgs/msg/TwistStamped.h"
 #endif // AP_DDS_NEEDS_TWIST
+#if AP_DDS_ACCEL_CTRL_ENABLED
+#include "geometry_msgs/msg/AccelStamped.h"
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+#include "mavros_msgs/msg/AttitudeTarget.h"
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
 #if AP_DDS_GPS_GLOBAL_ORIGIN_PUB_ENABLED
 #include "geographic_msgs/msg/GeoPointStamped.h"
 #endif // AP_DDS_GPS_GLOBAL_ORIGIN_PUB_ENABLED
@@ -248,6 +254,14 @@ private:
     // incoming REP147 goal interface global position
     static ardupilot_msgs_msg_GlobalPosition rx_global_position_control_topic;
 #endif // AP_DDS_GLOBAL_POS_CTRL_ENABLED
+#if AP_DDS_ACCEL_CTRL_ENABLED
+    // incoming acceleration setpoint control
+    static geometry_msgs_msg_AccelStamped rx_acceleration_control_topic;
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+    // incoming attitude+thrust setpoint control
+    static mavros_msgs_msg_AttitudeTarget rx_attitude_control_topic;
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
 #if AP_DDS_DYNAMIC_TF_SUB_ENABLED
     // incoming transforms
     static tf2_msgs_msg_TFMessage rx_dynamic_transforms_topic;

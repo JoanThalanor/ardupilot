@@ -86,6 +86,89 @@ bool AP_DDS_External_Control::handle_velocity_control(geometry_msgs_msg_TwistSta
     return false;
 }
 
+#if AP_DDS_ACCEL_CTRL_ENABLED
+bool AP_DDS_External_Control::handle_acceleration_control(geometry_msgs_msg_AccelStamped& cmd_accel)
+{
+    auto *external_control = AP::externalcontrol();
+    if (external_control == nullptr) {
+        return false;
+    }
+
+    const float yaw_rate = -cmd_accel.accel.angular.z;
+
+    if (strcmp(cmd_accel.header.frame_id, BASE_LINK_FRAME_ID) == 0) {
+        // Convert commands from body frame (x-forward, y-left, z-up) to NED.
+        Vector3f linear_accel_base_link {
+            float(cmd_accel.accel.linear.x),
+            float(cmd_accel.accel.linear.y),
+            float(-cmd_accel.accel.linear.z) };
+
+        auto &ahrs = AP::ahrs();
+        const Vector3f linear_accel_ned = ahrs.body_to_earth(linear_accel_base_link);
+        return external_control->set_acceleration_and_yaw_rate(linear_accel_ned, yaw_rate);
+    }
+
+    if (strcmp(cmd_accel.header.frame_id, MAP_FRAME) == 0) {
+        // Convert commands from ENU to NED frame
+        Vector3f linear_accel_ned {
+            float(cmd_accel.accel.linear.y),
+            float(cmd_accel.accel.linear.x),
+            float(-cmd_accel.accel.linear.z) };
+        return external_control->set_acceleration_and_yaw_rate(linear_accel_ned, yaw_rate);
+    }
+
+    return false;
+}
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+bool AP_DDS_External_Control::handle_attitude_control(mavros_msgs_msg_AttitudeTarget& cmd_att)
+{
+    auto *external_control = AP::externalcontrol();
+    if (external_control == nullptr) {
+        return false;
+    }
+
+    if (strcmp(cmd_att.header.frame_id, MAP_FRAME) != 0) {
+        return false;
+    }
+
+    if (cmd_att.type_mask & AttitudeTarget::IGNORE_ATTITUDE) {
+        // This path is specifically for attitude+thrust control — an
+        // orientation-less request has nothing for us to do.
+        return false;
+    }
+
+    // Inverse of AP_DDS_Client's local-pose publishing transform (NED->ENU +
+    // Z-axis 90deg rotation, AP_DDS_Client.cpp's populate_pose_topic): here we
+    // go ENU (ROS REP-103, as received) back to NED (ArduPilot native,
+    // as ModeGuided::set_angle()/attitude_control->input_quaternion() expect).
+    const Quaternion orientation_enu {
+        float(cmd_att.orientation.w), float(cmd_att.orientation.x),
+        float(cmd_att.orientation.y), float(cmd_att.orientation.z) };
+    const Quaternion transformation_inv (sqrtF(2) * 0.5, 0, 0, -sqrtF(2) * 0.5); // inverse Z-axis 90deg rotation
+    const Quaternion rotated = orientation_enu * transformation_inv;
+    const Quaternion attitude_ned (rotated[0], rotated[2], rotated[1], -rotated[3]); // self-inverse ENU<->NED swap
+
+    // body_rate: ROS REP-103 body FLU (x-forward,y-left,z-up) -> ArduPilot
+    // body FRD (x-forward,y-right,z-down) — negate y and z, no axis swap.
+    Vector3f ang_vel_body_rads {0.0f, 0.0f, 0.0f};
+    if (!(cmd_att.type_mask & AttitudeTarget::IGNORE_ROLL_RATE)) {
+        ang_vel_body_rads.x = float(cmd_att.body_rate.x);
+    }
+    if (!(cmd_att.type_mask & AttitudeTarget::IGNORE_PITCH_RATE)) {
+        ang_vel_body_rads.y = -float(cmd_att.body_rate.y);
+    }
+    if (!(cmd_att.type_mask & AttitudeTarget::IGNORE_YAW_RATE)) {
+        ang_vel_body_rads.z = -float(cmd_att.body_rate.z);
+    }
+
+    const float thrust_norm = (cmd_att.type_mask & AttitudeTarget::IGNORE_THRUST) ? 0.0f : float(cmd_att.thrust);
+
+    return external_control->set_attitude_and_thrust(attitude_ned, ang_vel_body_rads, thrust_norm);
+}
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
+
 bool AP_DDS_External_Control::arm(AP_Arming::Method method, bool do_arming_checks)
 {
     auto *external_control = AP::externalcontrol();

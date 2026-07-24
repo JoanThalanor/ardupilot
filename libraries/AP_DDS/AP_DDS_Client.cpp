@@ -113,6 +113,12 @@ geometry_msgs_msg_TwistStamped AP_DDS_Client::rx_velocity_control_topic {};
 #if AP_DDS_GLOBAL_POS_CTRL_ENABLED
 ardupilot_msgs_msg_GlobalPosition AP_DDS_Client::rx_global_position_control_topic {};
 #endif // AP_DDS_GLOBAL_POS_CTRL_ENABLED
+#if AP_DDS_ACCEL_CTRL_ENABLED
+geometry_msgs_msg_AccelStamped AP_DDS_Client::rx_acceleration_control_topic {};
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+mavros_msgs_msg_AttitudeTarget AP_DDS_Client::rx_attitude_control_topic {};
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
 
 // Define the parameter server data members, which are static class scope.
 // If these are created on the stack, then the AP_DDS_Client::on_request
@@ -905,6 +911,34 @@ void AP_DDS_Client::on_topic(uxrSession* uxr_session, uxrObjectId object_id, uin
         break;
     }
 #endif // AP_DDS_GLOBAL_POS_CTRL_ENABLED
+#if AP_DDS_ACCEL_CTRL_ENABLED
+    case topics[to_underlying(TopicIndex::ACCEL_CONTROL_SUB)].dr_id.id: {
+        const bool success = geometry_msgs_msg_AccelStamped_deserialize_topic(ub, &rx_acceleration_control_topic);
+        if (success == false) {
+            break;
+        }
+#if AP_EXTERNAL_CONTROL_ENABLED
+        if (!AP_DDS_External_Control::handle_acceleration_control(rx_acceleration_control_topic)) {
+            // TODO #23430 handle acceleration control failure through rosout, throttled.
+        }
+#endif // AP_EXTERNAL_CONTROL_ENABLED
+        break;
+    }
+#endif // AP_DDS_ACCEL_CTRL_ENABLED
+#if AP_DDS_ATTITUDE_CTRL_ENABLED
+    case topics[to_underlying(TopicIndex::ATTITUDE_CONTROL_SUB)].dr_id.id: {
+        const bool success = mavros_msgs_msg_AttitudeTarget_deserialize_topic(ub, &rx_attitude_control_topic);
+        if (success == false) {
+            break;
+        }
+#if AP_EXTERNAL_CONTROL_ENABLED
+        if (!AP_DDS_External_Control::handle_attitude_control(rx_attitude_control_topic)) {
+            // TODO #23430 handle attitude control failure through rosout, throttled.
+        }
+#endif // AP_EXTERNAL_CONTROL_ENABLED
+        break;
+    }
+#endif // AP_DDS_ATTITUDE_CTRL_ENABLED
 #if AP_DDS_CLOCK_SUB_ENABLED
     case topics[to_underlying(TopicIndex::CLOCK_SUB)].dr_id.id: {
         const bool success = rosgraph_msgs_msg_Clock_deserialize_topic(ub, &rx_clock_topic);
