@@ -1740,15 +1740,33 @@ void AP_DDS_Client::write_battery_state_topic()
 void AP_DDS_Client::write_local_pose_topic()
 {
     WITH_SEMAPHORE(csem);
+    static uint32_t dbg_calls = 0;
+    static uint32_t dbg_not_connected = 0;
+    static uint32_t dbg_fail = 0;
+    static uint32_t dbg_ok = 0;
+    static uint32_t dbg_last_report_ms = 0;
+    dbg_calls++;
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = geometry_msgs_msg_PoseStamped_size_of_topic(&local_pose_topic, 0);
         uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::LOCAL_POSE_PUB)].dw_id, &ub, topic_size);
         const bool success = geometry_msgs_msg_PoseStamped_serialize_topic(&ub, &local_pose_topic);
         if (!success) {
+            dbg_fail++;
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
+        } else {
+            dbg_ok++;
         }
+    } else {
+        dbg_not_connected++;
+    }
+    const uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - dbg_last_report_ms > 5000) {
+        dbg_last_report_ms = now_ms;
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "DDS pose dbg: calls=%lu ok=%lu fail=%lu noconn=%lu",
+                      (unsigned long)dbg_calls, (unsigned long)dbg_ok,
+                      (unsigned long)dbg_fail, (unsigned long)dbg_not_connected);
     }
 }
 #endif // AP_DDS_LOCAL_POSE_PUB_ENABLED
@@ -1757,15 +1775,29 @@ void AP_DDS_Client::write_local_pose_topic()
 void AP_DDS_Client::write_tx_local_velocity_topic()
 {
     WITH_SEMAPHORE(csem);
+    static uint32_t dbg_calls = 0;
+    static uint32_t dbg_fail = 0;
+    static uint32_t dbg_ok = 0;
+    static uint32_t dbg_last_report_ms = 0;
+    dbg_calls++;
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = geometry_msgs_msg_TwistStamped_size_of_topic(&tx_local_velocity_topic, 0);
         uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::LOCAL_VELOCITY_PUB)].dw_id, &ub, topic_size);
         const bool success = geometry_msgs_msg_TwistStamped_serialize_topic(&ub, &tx_local_velocity_topic);
         if (!success) {
+            dbg_fail++;
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
+        } else {
+            dbg_ok++;
         }
+    }
+    const uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - dbg_last_report_ms > 5000) {
+        dbg_last_report_ms = now_ms;
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "DDS twist dbg: calls=%lu ok=%lu fail=%lu",
+                      (unsigned long)dbg_calls, (unsigned long)dbg_ok, (unsigned long)dbg_fail);
     }
 }
 #endif // AP_DDS_LOCAL_VEL_PUB_ENABLED
@@ -1888,15 +1920,29 @@ void AP_DDS_Client::write_goal_topic()
 void AP_DDS_Client::write_status_topic()
 {
     WITH_SEMAPHORE(csem);
+    static uint32_t dbg_calls = 0;
+    static uint32_t dbg_fail = 0;
+    static uint32_t dbg_ok = 0;
+    static uint32_t dbg_last_report_ms = 0;
+    dbg_calls++;
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = ardupilot_msgs_msg_Status_size_of_topic(&status_topic, 0);
         uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::STATUS_PUB)].dw_id, &ub, topic_size);
         const bool success = ardupilot_msgs_msg_Status_serialize_topic(&ub, &status_topic);
         if (!success) {
+            dbg_fail++;
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
+        } else {
+            dbg_ok++;
         }
+    }
+    const uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - dbg_last_report_ms > 5000) {
+        dbg_last_report_ms = now_ms;
+        GCS_SEND_TEXT(MAV_SEVERITY_INFO, "DDS status dbg: calls=%lu ok=%lu fail=%lu",
+                      (unsigned long)dbg_calls, (unsigned long)dbg_ok, (unsigned long)dbg_fail);
     }
 }
 #endif // AP_DDS_STATUS_PUB_ENABLED
@@ -2006,7 +2052,12 @@ void AP_DDS_Client::update()
     }
 #endif // AP_DDS_STATUS_PUB_ENABLED
 
-    status_ok = uxr_run_session_time(&session, 1);
+    // Was 1ms — too tight to read+process an incoming ACKNACK for the reliable
+    // stream over a busy serial link, so last_acknown never advanced and the
+    // shared reliable window (all topics) permanently filled after a handful
+    // of writes (confirmed with a debug counter, 2026-07-27). 10ms gives the
+    // ACKNACK round-trip room to actually complete each cycle.
+    status_ok = uxr_run_session_time(&session, 20);
 }
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
