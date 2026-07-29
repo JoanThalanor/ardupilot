@@ -71,13 +71,19 @@
 #endif
 
 #ifndef AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS
+// TEMP diagnostic edit (2026-07-29): forcing 10ms directly in-source to verify
+// whether waf's --define=AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS=10 build-flag override
+// was actually taking effect (measured rate stayed ~30Hz despite the configure
+// log confirming the flag was passed) — REVERT TO 33 before any hardware build,
+// see the real-hardware bandwidth-saturation reasoning below.
+//
 // Reverted to stock 33ms (2026-07-27): 10ms saturated the single shared
 // reliable XRCE stream (8x512B history) on real hardware over a 921600 baud
 // UART — geometry_msgs_msg_PoseStamped_serialize_topic() succeeded a handful
 // of times at boot then failed on every subsequent call, forever (confirmed
 // with a debug counter). Never showed up in SITL, which isn't bandwidth
 // bound. See AP_DDS_Client.cpp's write_local_pose_topic() TODO.
-#define AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS 33
+#define AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS 10
 #endif
 
 #ifndef AP_DDS_LOCAL_VEL_PUB_ENABLED
@@ -86,7 +92,7 @@
 
 #ifndef AP_DDS_DELAY_LOCAL_VELOCITY_TOPIC_MS
 // See AP_DDS_DELAY_LOCAL_POSE_TOPIC_MS above — kept in lockstep with it.
-#define AP_DDS_DELAY_LOCAL_VELOCITY_TOPIC_MS 33
+#define AP_DDS_DELAY_LOCAL_VELOCITY_TOPIC_MS 10
 #endif
 
 #ifndef AP_DDS_AIRSPEED_PUB_ENABLED
