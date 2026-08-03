@@ -1334,23 +1334,16 @@ void AP_DDS_Client::main_loop(void)
 
         // create session
         if (!init_session() || !create()) {
-#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
             // A transient timeout creating the participant/topics (the requests
-            // have a hard per-request timeout) must not permanently kill DDS.
-            // Drop any half-open session and retry the whole connect sequence.
+            // have a hard per-request timeout) must not permanently kill DDS —
+            // this is routine on real hardware when the agent isn't listening
+            // yet at the exact moment the FC boots (e.g. warm_up hasn't started
+            // the agent process yet). Drop any half-open session and retry the
+            // whole connect sequence instead of giving up until the next reboot.
             GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "%s Creation Requests failed, retrying", msg_prefix);
             uxr_delete_session(&session);
             hal.scheduler->delay(1000);
             continue;
-#else
-            // FIXME: determine whether we can use the retry code
-            // above on real vehicles.  We have two different paths
-            // here because the DDS CI tests were flapping for years
-            // and this was the most viable way of getting a fix
-            // merged.
-            GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "%s Creation Requests failed", msg_prefix);
-            return;
-#endif  // CONFIG_HAL_BOARD == HAL_BOARD_SITL
         }
         connected = true;
         GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s Initialization passed", msg_prefix);
@@ -2055,9 +2048,12 @@ void AP_DDS_Client::update()
     // Was 1ms — too tight to read+process an incoming ACKNACK for the reliable
     // stream over a busy serial link, so last_acknown never advanced and the
     // shared reliable window (all topics) permanently filled after a handful
-    // of writes (confirmed with a debug counter, 2026-07-27). 10ms gives the
-    // ACKNACK round-trip room to actually complete each cycle.
-    status_ok = uxr_run_session_time(&session, 20);
+    // of writes (confirmed with a debug counter, 2026-07-27). Bumped 1ms->20ms
+    // that day, but the "connects, serializes ok, zero data reaches ROS2"
+    // symptom recurred 2026-08-03 with a much busier Jetson (vision/tracking/
+    // guidance nodes competing for CPU+UART) — trying 100ms for more ACKNACK
+    // round-trip room per cycle.
+    status_ok = uxr_run_session_time(&session, 100);
 }
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
