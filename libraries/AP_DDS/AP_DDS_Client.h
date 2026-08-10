@@ -80,18 +80,10 @@
 #define DDS_STREAM_HISTORY  32
 #define DDS_BUFFER_SIZE     DDS_MTU * DDS_STREAM_HISTORY
 
-// The best-effort stream carries every high-rate topic (time, navsat, local
-// pose/velocity, airspeed, rc, imu, geopose, clock, gps_global_origin) and all
-// of them are serialized into this ONE buffer within a single update() cycle
-// before uxr_run_session_time() flushes it once at the end — unlike the
-// reliable stream, there is no second slot to spill into. DDS_MTU (512) is a
-// wire-transport packet size, not a per-cycle payload budget, and is too
-// small once IMU alone (orientation + 3 covariance matrices, ~300B) shares
-// the buffer with the other 9 topics: combined worst case is time(~35) +
-// navsat(~150 x up to 2 GPS instances) + pose(~90) + velocity(~85) +
-// airspeed(~40) + rc(~150) + imu(~340) + geopose(~90) + clock(~30) +
-// gps_global_origin(~60) ~= 1220B. Sized with ~65% headroom over that for
-// future topics/margin rather than the wire MTU.
+// ~10 high-rate topics share this ONE buffer per update() cycle before a
+// single flush; DDS_MTU (512, a wire packet size) is too small once they
+// co-fire (time/clock@10ms, pose/vel/geopose@33ms — see AP_DDS_config.h).
+// Sized from their combined worst case (~1220B) with headroom.
 #define DDS_BEST_EFFORT_BUFFER_SIZE 2048
 
 #if AP_DDS_UDP_ENABLED
