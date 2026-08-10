@@ -1452,7 +1452,7 @@ bool AP_DDS_Client::init_session()
         output_reliable_stream = NEW_NOTHROW uint8_t[DDS_BUFFER_SIZE];
     }
     if (output_best_effort_stream == nullptr) {
-        output_best_effort_stream = NEW_NOTHROW uint8_t[DDS_MTU];
+        output_best_effort_stream = NEW_NOTHROW uint8_t[DDS_BEST_EFFORT_BUFFER_SIZE];
     }
     if (input_reliable_stream == nullptr || output_reliable_stream == nullptr || output_best_effort_stream == nullptr) {
         GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "%s Allocation failed", msg_prefix);
@@ -1466,7 +1466,7 @@ bool AP_DDS_Client::init_session()
     // stream is harmless and self-healing. Keeping it off the reliable stream stops
     // it from starving the shared ACKNACK window that entity creation and
     // change-gated topics (status/battery) still rely on for guaranteed delivery.
-    best_effort_out = uxr_create_output_best_effort_stream(&session, output_best_effort_stream, DDS_MTU);
+    best_effort_out = uxr_create_output_best_effort_stream(&session, output_best_effort_stream, DDS_BEST_EFFORT_BUFFER_SIZE);
 
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s Init complete", msg_prefix);
 
