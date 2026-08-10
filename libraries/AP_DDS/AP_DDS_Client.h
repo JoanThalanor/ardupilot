@@ -111,6 +111,10 @@ private:
     uxrStreamId reliable_out;
     uint8_t *output_best_effort_stream;
     uxrStreamId best_effort_out;
+    // set once the streams above are registered with the client's stream
+    // storage; re-registering on every reconnect leaks a slot per stream
+    // (see init_session()) until the client's fixed-size storage overflows
+    bool streams_registered;
 
     // Outgoing Sensor and AHRS data
 

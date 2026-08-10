@@ -1459,14 +1459,25 @@ bool AP_DDS_Client::init_session()
         return false;
     }
 
-    reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, DDS_BUFFER_SIZE, DDS_STREAM_HISTORY);
-    reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, DDS_BUFFER_SIZE, DDS_STREAM_HISTORY);
-    // High-rate telemetry (pose/vel/imu/etc) is republished every cycle regardless of
-    // whether the agent ACKed the previous sample, so losing one over a best-effort
-    // stream is harmless and self-healing. Keeping it off the reliable stream stops
-    // it from starving the shared ACKNACK window that entity creation and
-    // change-gated topics (status/battery) still rely on for guaranteed delivery.
-    best_effort_out = uxr_create_output_best_effort_stream(&session, output_best_effort_stream, DDS_BEST_EFFORT_BUFFER_SIZE);
+    // uxr_create_session() resets the internal state (write pointers, sequence
+    // numbers) of already-registered stream slots on every call, but the
+    // uxr_create_*_stream() calls below each unconditionally allocate a NEW
+    // slot in the client's fixed-size stream storage — they don't check "does
+    // this slot already exist" like the buffer allocation above does. Calling
+    // them again on every reconnect leaks a slot per stream per reconnect;
+    // UXR_CONFIG_MAX_INPUT_RELIABLE_STREAMS is only 2, so the 2nd reconnect
+    // writes past the end of that array. Register once, keep the IDs.
+    if (!streams_registered) {
+        reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, DDS_BUFFER_SIZE, DDS_STREAM_HISTORY);
+        reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, DDS_BUFFER_SIZE, DDS_STREAM_HISTORY);
+        // High-rate telemetry (pose/vel/imu/etc) is republished every cycle regardless of
+        // whether the agent ACKed the previous sample, so losing one over a best-effort
+        // stream is harmless and self-healing. Keeping it off the reliable stream stops
+        // it from starving the shared ACKNACK window that entity creation and
+        // change-gated topics (status/battery) still rely on for guaranteed delivery.
+        best_effort_out = uxr_create_output_best_effort_stream(&session, output_best_effort_stream, DDS_BEST_EFFORT_BUFFER_SIZE);
+        streams_registered = true;
+    }
 
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s Init complete", msg_prefix);
 
