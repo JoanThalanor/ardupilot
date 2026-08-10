@@ -1684,6 +1684,10 @@ void AP_DDS_Client::write_time_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: XRCE_Client failed to serialize");
         }
+        // Best-effort topics share one buffer across the whole update() cycle;
+        // flush right away so it never has to hold more than one message at a
+        // time instead of accumulating all of them (see DDS_BEST_EFFORT_BUFFER_SIZE).
+        uxr_flash_output_streams(&session);
     }
 }
 
@@ -1700,6 +1704,7 @@ void AP_DDS_Client::write_nav_sat_fix_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_NAVSATFIX_PUB_ENABLED
@@ -1760,6 +1765,7 @@ void AP_DDS_Client::write_local_pose_topic()
         } else {
             dbg_ok++;
         }
+        uxr_flash_output_streams(&session);
     } else {
         dbg_not_connected++;
     }
@@ -1794,6 +1800,7 @@ void AP_DDS_Client::write_tx_local_velocity_topic()
         } else {
             dbg_ok++;
         }
+        uxr_flash_output_streams(&session);
     }
     const uint32_t now_ms = AP_HAL::millis();
     if (now_ms - dbg_last_report_ms > 5000) {
@@ -1816,6 +1823,7 @@ void AP_DDS_Client::write_tx_local_airspeed_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_AIRSPEED_PUB_ENABLED
@@ -1832,6 +1840,7 @@ void AP_DDS_Client::write_tx_local_rc_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize\n");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_RC_PUB_ENABLED
@@ -1848,6 +1857,7 @@ void AP_DDS_Client::write_imu_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_IMU_PUB_ENABLED
@@ -1865,6 +1875,7 @@ void AP_DDS_Client::write_geo_pose_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_GEOPOSE_PUB_ENABLED
@@ -1882,6 +1893,7 @@ void AP_DDS_Client::write_clock_topic()
             // TODO sometimes serialization fails on bootup. Determine why.
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_CLOCK_PUB_ENABLED
@@ -1898,6 +1910,7 @@ void AP_DDS_Client::write_gps_global_origin_topic()
         if (!success) {
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
         }
+        uxr_flash_output_streams(&session);
     }
 }
 #endif // AP_DDS_GPS_GLOBAL_ORIGIN_PUB_ENABLED

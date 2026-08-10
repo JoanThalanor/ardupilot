@@ -81,18 +81,16 @@
 #define DDS_BUFFER_SIZE     DDS_MTU * DDS_STREAM_HISTORY
 
 // The best-effort stream carries every high-rate topic (time, navsat, local
-// pose/velocity, airspeed, rc, imu, geopose, clock, gps_global_origin) and all
-// of them are serialized into this ONE buffer within a single update() cycle
-// before uxr_run_session_time() flushes it once at the end — unlike the
-// reliable stream, there is no second slot to spill into. DDS_MTU (512) is a
-// wire-transport packet size, not a per-cycle payload budget, and is too
-// small once IMU alone (orientation + 3 covariance matrices, ~300B) shares
-// the buffer with the other 9 topics: combined worst case is time(~35) +
-// navsat(~150 x up to 2 GPS instances) + pose(~90) + velocity(~85) +
-// airspeed(~40) + rc(~150) + imu(~340) + geopose(~90) + clock(~30) +
-// gps_global_origin(~60) ~= 1220B. Sized with ~65% headroom over that for
-// future topics/margin rather than the wire MTU.
-#define DDS_BEST_EFFORT_BUFFER_SIZE 2048
+// pose/velocity, airspeed, rc, imu, geopose, clock, gps_global_origin). Each
+// write_*_topic() for these calls uxr_flash_output_streams() right after
+// serializing, so this buffer only ever has to hold ONE topic at a time
+// rather than accumulating all of them across a whole update() cycle before
+// a single end-of-cycle flush — the previous design, which reused DDS_MTU
+// (512B, a wire-transport packet size) as that whole-cycle accumulator and
+// silently dropped whichever topics didn't fit once the running total
+// exceeded it. Sized for the largest single message on this stream (Imu:
+// orientation + 3 covariance matrices, ~340B) with headroom.
+#define DDS_BEST_EFFORT_BUFFER_SIZE 768
 
 #if AP_DDS_UDP_ENABLED
 #include <AP_HAL/utility/Socket.h>
