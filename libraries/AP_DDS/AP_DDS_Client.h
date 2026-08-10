@@ -77,7 +77,7 @@
 #include <AP_Param/AP_Param.h>
 
 #define DDS_MTU             512
-#define DDS_STREAM_HISTORY  8
+#define DDS_STREAM_HISTORY  32
 #define DDS_BUFFER_SIZE     DDS_MTU * DDS_STREAM_HISTORY
 
 #if AP_DDS_UDP_ENABLED
@@ -103,6 +103,8 @@ private:
     uint8_t *output_reliable_stream;
     uxrStreamId reliable_in;
     uxrStreamId reliable_out;
+    uint8_t *output_best_effort_stream;
+    uxrStreamId best_effort_out;
 
     // Outgoing Sensor and AHRS data
 

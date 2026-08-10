@@ -1451,13 +1451,22 @@ bool AP_DDS_Client::init_session()
     if (output_reliable_stream == nullptr) {
         output_reliable_stream = NEW_NOTHROW uint8_t[DDS_BUFFER_SIZE];
     }
-    if (input_reliable_stream == nullptr || output_reliable_stream == nullptr) {
+    if (output_best_effort_stream == nullptr) {
+        output_best_effort_stream = NEW_NOTHROW uint8_t[DDS_MTU];
+    }
+    if (input_reliable_stream == nullptr || output_reliable_stream == nullptr || output_best_effort_stream == nullptr) {
         GCS_SEND_TEXT(MAV_SEVERITY_ERROR, "%s Allocation failed", msg_prefix);
         return false;
     }
 
     reliable_in = uxr_create_input_reliable_stream(&session, input_reliable_stream, DDS_BUFFER_SIZE, DDS_STREAM_HISTORY);
     reliable_out = uxr_create_output_reliable_stream(&session, output_reliable_stream, DDS_BUFFER_SIZE, DDS_STREAM_HISTORY);
+    // High-rate telemetry (pose/vel/imu/etc) is republished every cycle regardless of
+    // whether the agent ACKed the previous sample, so losing one over a best-effort
+    // stream is harmless and self-healing. Keeping it off the reliable stream stops
+    // it from starving the shared ACKNACK window that entity creation and
+    // change-gated topics (status/battery) still rely on for guaranteed delivery.
+    best_effort_out = uxr_create_output_best_effort_stream(&session, output_best_effort_stream, DDS_MTU);
 
     GCS_SEND_TEXT(MAV_SEVERITY_INFO, "%s Init complete", msg_prefix);
 
@@ -1669,7 +1678,7 @@ void AP_DDS_Client::write_time_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = builtin_interfaces_msg_Time_size_of_topic(&time_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::TIME_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::TIME_PUB)].dw_id, &ub, topic_size);
         const bool success = builtin_interfaces_msg_Time_serialize_topic(&ub, &time_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1685,7 +1694,7 @@ void AP_DDS_Client::write_nav_sat_fix_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = sensor_msgs_msg_NavSatFix_size_of_topic(&nav_sat_fix_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::NAV_SAT_FIX_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::NAV_SAT_FIX_PUB)].dw_id, &ub, topic_size);
         const bool success = sensor_msgs_msg_NavSatFix_serialize_topic(&ub, &nav_sat_fix_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1742,7 +1751,7 @@ void AP_DDS_Client::write_local_pose_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = geometry_msgs_msg_PoseStamped_size_of_topic(&local_pose_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::LOCAL_POSE_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::LOCAL_POSE_PUB)].dw_id, &ub, topic_size);
         const bool success = geometry_msgs_msg_PoseStamped_serialize_topic(&ub, &local_pose_topic);
         if (!success) {
             dbg_fail++;
@@ -1776,7 +1785,7 @@ void AP_DDS_Client::write_tx_local_velocity_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = geometry_msgs_msg_TwistStamped_size_of_topic(&tx_local_velocity_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::LOCAL_VELOCITY_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::LOCAL_VELOCITY_PUB)].dw_id, &ub, topic_size);
         const bool success = geometry_msgs_msg_TwistStamped_serialize_topic(&ub, &tx_local_velocity_topic);
         if (!success) {
             dbg_fail++;
@@ -1801,7 +1810,7 @@ void AP_DDS_Client::write_tx_local_airspeed_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = ardupilot_msgs_msg_Airspeed_size_of_topic(&tx_local_airspeed_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::LOCAL_AIRSPEED_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::LOCAL_AIRSPEED_PUB)].dw_id, &ub, topic_size);
         const bool success = ardupilot_msgs_msg_Airspeed_serialize_topic(&ub, &tx_local_airspeed_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1817,7 +1826,7 @@ void AP_DDS_Client::write_tx_local_rc_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = ardupilot_msgs_msg_Rc_size_of_topic(&tx_local_rc_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::LOCAL_RC_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::LOCAL_RC_PUB)].dw_id, &ub, topic_size);
         const bool success = ardupilot_msgs_msg_Rc_serialize_topic(&ub, &tx_local_rc_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1833,7 +1842,7 @@ void AP_DDS_Client::write_imu_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = sensor_msgs_msg_Imu_size_of_topic(&imu_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::IMU_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::IMU_PUB)].dw_id, &ub, topic_size);
         const bool success = sensor_msgs_msg_Imu_serialize_topic(&ub, &imu_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1850,7 +1859,7 @@ void AP_DDS_Client::write_geo_pose_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = geographic_msgs_msg_GeoPoseStamped_size_of_topic(&geo_pose_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::GEOPOSE_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::GEOPOSE_PUB)].dw_id, &ub, topic_size);
         const bool success = geographic_msgs_msg_GeoPoseStamped_serialize_topic(&ub, &geo_pose_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1867,7 +1876,7 @@ void AP_DDS_Client::write_clock_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = rosgraph_msgs_msg_Clock_size_of_topic(&clock_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::CLOCK_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::CLOCK_PUB)].dw_id, &ub, topic_size);
         const bool success = rosgraph_msgs_msg_Clock_serialize_topic(&ub, &clock_topic);
         if (!success) {
             // TODO sometimes serialization fails on bootup. Determine why.
@@ -1884,7 +1893,7 @@ void AP_DDS_Client::write_gps_global_origin_topic()
     if (connected) {
         ucdrBuffer ub {};
         const uint32_t topic_size = geographic_msgs_msg_GeoPointStamped_size_of_topic(&gps_global_origin_topic, 0);
-        uxr_prepare_output_stream(&session, reliable_out, topics[to_underlying(TopicIndex::GPS_GLOBAL_ORIGIN_PUB)].dw_id, &ub, topic_size);
+        uxr_prepare_output_stream(&session, best_effort_out, topics[to_underlying(TopicIndex::GPS_GLOBAL_ORIGIN_PUB)].dw_id, &ub, topic_size);
         const bool success = geographic_msgs_msg_GeoPointStamped_serialize_topic(&ub, &gps_global_origin_topic);
         if (!success) {
             // AP_HAL::panic("FATAL: DDS_Client failed to serialize");
