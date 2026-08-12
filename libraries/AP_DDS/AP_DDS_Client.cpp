@@ -2065,21 +2065,10 @@ void AP_DDS_Client::update()
     }
 #endif // AP_DDS_STATUS_PUB_ENABLED
 
-    // Was 1ms — too tight to read+process an incoming ACKNACK for the reliable
-    // stream over a busy serial link, so last_acknown never advanced and the
-    // shared reliable window (all topics) permanently filled after a handful
-    // of writes (confirmed with a debug counter, 2026-07-27). Bumped 1ms->20ms
-    // that day, but the "connects, serializes ok, zero data reaches ROS2"
-    // symptom recurred 2026-08-03 with a much busier Jetson (vision/tracking/
-    // guidance nodes competing for CPU+UART) — trying 100ms for more ACKNACK
-    // round-trip room per cycle.
-    //
-    // uxr_run_session_time() re-grants the full timeout_ms on every iteration
-    // where listen_message_reliably() receives something, instead of tracking
-    // total elapsed time -- on a busy reliable stream this makes its
-    // worst-case blocking time unbounded (confirmed 2026-08-11). Its sibling
-    // uxr_run_session_timeout() does this correctly with a real decreasing
-    // time budget.
+    // uxr_run_session_time() re-grants the full 100ms on every iteration that
+    // receives something instead of tracking total elapsed time, making its
+    // worst-case blocking time unbounded on a busy link. uxr_run_session_timeout()
+    // tracks a real decreasing budget across retries.
     status_ok = uxr_run_session_timeout(&session, 100);
 }
 
@@ -2090,23 +2079,10 @@ extern "C" {
 
 int clock_gettime(clockid_t clockid, struct timespec *ts)
 {
-    // Only ever called by the vendored XRCE client for elapsed-time/deadline
-    // math (uxr_millis()/uxr_nanos()), which needs a monotonic clock -- it
-    // does not want a wall-clock timestamp (clockid is ignored either way,
-    // since libc's caller-selectable-clock API doesn't matter if there's
-    // only ever one caller with one need). Previously preferred
-    // AP::rtc().get_utc_usec() (wall-clock UTC, which can become valid
-    // mid-flight from a GCS SYSTEM_TIME message or an RTC sync event) with an
-    // AP_HAL::micros64() (monotonic since-boot) fallback. If RTC validity
-    // toggled *while* a single XRCE deadline calculation was in progress
-    // (start captured under one epoch, elapsed computed under the other),
-    // the elapsed-time arithmetic could jump by decades, making a
-    // supposedly-100ms-bounded wait effectively infinite -- reproduced on
-    // real hardware as the DDS client thread permanently hanging inside
-    // uxr_run_session_timeout() a variable (~7s-90s+) time after connecting,
-    // matching exactly how long it took an RTC validity transition to land
-    // inside that call (confirmed 2026-08-12). Always use a single,
-    // genuinely monotonic time base instead.
+    // Only used by the XRCE client for elapsed-time math. Previously fell
+    // back to AP::rtc()'s wall-clock UTC when available; if RTC validity
+    // toggled mid-calculation the elapsed time could jump by decades,
+    // turning a 100ms wait into a permanent hang. Stay monotonic.
     const uint64_t utc_usec = AP_HAL::micros64();
     ts->tv_sec = utc_usec / 1000000ULL;
     ts->tv_nsec = (utc_usec % 1000000ULL) * 1000UL;
