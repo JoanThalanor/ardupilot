@@ -2073,7 +2073,14 @@ void AP_DDS_Client::update()
     // symptom recurred 2026-08-03 with a much busier Jetson (vision/tracking/
     // guidance nodes competing for CPU+UART) — trying 100ms for more ACKNACK
     // round-trip room per cycle.
-    status_ok = uxr_run_session_time(&session, 100);
+    //
+    // uxr_run_session_time() re-grants the full timeout_ms on every iteration
+    // where listen_message_reliably() receives something, instead of tracking
+    // total elapsed time -- on a busy reliable stream this makes its
+    // worst-case blocking time unbounded (confirmed 2026-08-11). Its sibling
+    // uxr_run_session_timeout() does this correctly with a real decreasing
+    // time budget.
+    status_ok = uxr_run_session_timeout(&session, 100);
 }
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_CHIBIOS
@@ -2083,12 +2090,24 @@ extern "C" {
 
 int clock_gettime(clockid_t clockid, struct timespec *ts)
 {
-    //! @todo the value of clockid is ignored here.
-    //! A fallback mechanism is employed against the caller's choice of clock.
-    uint64_t utc_usec;
-    if (!AP::rtc().get_utc_usec(utc_usec)) {
-        utc_usec = AP_HAL::micros64();
-    }
+    // Only ever called by the vendored XRCE client for elapsed-time/deadline
+    // math (uxr_millis()/uxr_nanos()), which needs a monotonic clock -- it
+    // does not want a wall-clock timestamp (clockid is ignored either way,
+    // since libc's caller-selectable-clock API doesn't matter if there's
+    // only ever one caller with one need). Previously preferred
+    // AP::rtc().get_utc_usec() (wall-clock UTC, which can become valid
+    // mid-flight from a GCS SYSTEM_TIME message or an RTC sync event) with an
+    // AP_HAL::micros64() (monotonic since-boot) fallback. If RTC validity
+    // toggled *while* a single XRCE deadline calculation was in progress
+    // (start captured under one epoch, elapsed computed under the other),
+    // the elapsed-time arithmetic could jump by decades, making a
+    // supposedly-100ms-bounded wait effectively infinite -- reproduced on
+    // real hardware as the DDS client thread permanently hanging inside
+    // uxr_run_session_timeout() a variable (~7s-90s+) time after connecting,
+    // matching exactly how long it took an RTC validity transition to land
+    // inside that call (confirmed 2026-08-12). Always use a single,
+    // genuinely monotonic time base instead.
+    const uint64_t utc_usec = AP_HAL::micros64();
     ts->tv_sec = utc_usec / 1000000ULL;
     ts->tv_nsec = (utc_usec % 1000000ULL) * 1000UL;
     return 0;
